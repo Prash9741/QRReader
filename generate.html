@@ -3,87 +3,101 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Create Attendance QR</title>
+<title>Auto Attendance QR Generator</title>
 <style>
 :root {
   --bg:#0f1720; --card:#081024; --accent:#10b981; --muted:#9aa5b1; --white:#e6eef6;
 }
 *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:var(--white);}
-body{margin:0;min-height:100vh;background:linear-gradient(180deg,#071227 0%,#051020 100%);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;}
-.app{width:100%;max-width:480px;background:linear-gradient(180deg,rgba(255,255,255,0.03),transparent);border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(2,6,23,0.6);}
+body{margin:0;min-height:100vh;background:linear-gradient(180deg,#071227 0%,#051020 100%);
+display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;}
+.app{width:100%;max-width:480px;background:linear-gradient(180deg,rgba(255,255,255,0.03),transparent);
+border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(2,6,23,0.6);}
 h1{text-align:center;margin-top:0;font-size:20px;}
-label{font-weight:600;display:block;margin:12px 0 6px;color:var(--muted);}
-input,textarea{width:100%;background:#021021;border:1px solid rgba(255,255,255,0.05);color:var(--white);padding:10px;border-radius:6px;font-family:monospace;font-size:14px;}
-textarea{resize:vertical;min-height:160px;}
-button{background:var(--accent);border:none;color:#021;padding:12px;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px;width:100%;margin-top:16px;}
 .qr-wrap{text-align:center;margin-top:20px;}
 canvas{background:#fff;padding:8px;border-radius:8px;}
+.code-display{font-size:22px;font-weight:700;text-align:center;margin-top:14px;color:var(--accent);letter-spacing:2px;}
+.timer-bar{height:6px;background:rgba(255,255,255,0.1);border-radius:4px;margin-top:16px;overflow:hidden;}
+.timer-fill{height:100%;width:0;background:var(--accent);}
 small{color:var(--muted);display:block;margin-top:10px;text-align:center;}
 </style>
 </head>
 <body>
 
 <div class="app">
-  <h1>QR Generator for Attendance</h1>
-
-  <label for="url">POST URL</label>
-  <input type="text" id="url" placeholder="https://example.com/api/attendance" value="https://api.restful-api.dev/objects">
-
-  <label for="json">JSON Data</label>
-  <textarea id="json">{
-    "name": "Present",
-    "data": {
-        "status":"Present"
-        }
-    }
-    </textarea>
-
-  <button id="generateBtn">Generate QR Code</button>
+  <h1>Auto QR Generator</h1>
 
   <div class="qr-wrap" id="qrWrap"></div>
-  <small id="status"></small>
+  <div class="code-display" id="codeDisplay">------</div>
+
+  <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+  <small id="status">Waiting to generate QR...</small>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 <script>
-const urlEl = document.getElementById('url');
-const jsonEl = document.getElementById('json');
+// --- CONFIG ---
+const POST_URL = "https://api.restful-api.dev/objects";
+const BASE_JSON = { "name": "Prashat", "data": "Present" };
+const DURATION = 5; // seconds between refresh
+
+// --- ELEMENTS ---
 const qrWrap = document.getElementById('qrWrap');
+const codeDisplay = document.getElementById('codeDisplay');
+const timerFill = document.getElementById('timerFill');
 const statusEl = document.getElementById('status');
-const btn = document.getElementById('generateBtn');
 
-btn.addEventListener('click', () => {
-  const url = urlEl.value.trim();
-  const jsonText = jsonEl.value.trim();
+let timerId = null;
 
-  if(!url || !jsonText){
-    statusEl.textContent = 'Please fill in both fields.';
-    qrWrap.innerHTML = '';
-    return;
+// --- HELPERS ---
+function randomCode(len=6){
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  return Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+function animateTimer(duration){
+  let start = Date.now();
+  cancelAnimationFrame(timerId);
+
+  function frame(){
+    const elapsed = (Date.now() - start) / 1000;
+    const progress = Math.min(elapsed / duration, 1);
+    timerFill.style.width = (progress * 100) + "%";
+    if(progress < 1){
+      timerId = requestAnimationFrame(frame);
+    } else {
+      generateQR(); // next cycle
+    }
   }
 
-  try {
-    JSON.parse(jsonText);
-  } catch(e){
-    statusEl.textContent = 'Invalid JSON: ' + e.message;
-    qrWrap.innerHTML = '';
-    return;
-  }
+  timerFill.style.width = "0%"; // reset before animation starts
+  timerId = requestAnimationFrame(frame);
+}
 
-  const qrData = `${url}\n${jsonText}`;
+function generateQR(){
+  const code = randomCode();
+  const jsonData = {...BASE_JSON, code};
+  console.log(jsonData);
+  const qrData = `${POST_URL}\n${JSON.stringify(jsonData)}`;
 
   qrWrap.innerHTML = '';
   const canvas = document.createElement('canvas');
   qrWrap.appendChild(canvas);
+  timerFill.style.width = "0%"; // reset bar immediately
 
   QRCode.toCanvas(canvas, qrData, { width: 260, margin: 1, color:{dark:"#000", light:"#fff"} }, err => {
     if(err){
       statusEl.textContent = 'Error generating QR: ' + err;
     } else {
-      statusEl.textContent = 'QR code generated successfully!';
+      statusEl.textContent = 'QR updated at ' + new Date().toLocaleTimeString();
+      codeDisplay.textContent = code;
+      animateTimer(DURATION); // start timer only after successful QR render
     }
   });
-});
+}
+
+// Start first QR
+generateQR();
 </script>
 
 </body>
