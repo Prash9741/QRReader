@@ -25,8 +25,8 @@ public class QRCodeBackend {
         stopper.start();
 
         while (true) {
-            long utcSeconds = Instant.now().getEpochSecond(); // UTC+0 seconds
-            long window = utcSeconds / WINDOW_SIZE-1;//i edit here
+            long utcSeconds = Instant.now().getEpochSecond()-5; // UTC+0 seconds and can change the time from here, Prashant
+            long window = utcSeconds / WINDOW_SIZE;
 
             if (window != lastWindow) { // generate new code only when window changes
                 String input = SECRET + window;
