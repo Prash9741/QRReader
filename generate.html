@@ -27,13 +27,16 @@ small{color:var(--muted);display:block;margin-top:10px;text-align:center;}
   <h1>QR Generator for Attendance</h1>
 
   <label for="url">POST URL</label>
-  <input type="text" id="url" placeholder="https://example.com/api/attendance" value="https://example.com/api/attendance">
+  <input type="text" id="url" placeholder="https://example.com/api/attendance" value="https://api.restful-api.dev/objects">
 
   <label for="json">JSON Data</label>
   <textarea id="json">{
-  "student_id": "12345",
-  "session": "math-01"
-}</textarea>
+    "name": "Present",
+    "data": {
+        "status":"Present"
+        }
+    }
+    </textarea>
 
   <button id="generateBtn">Generate QR Code</button>
 
