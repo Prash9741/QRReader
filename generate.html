@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create Attendance QR</title>
+<style>
+:root {
+  --bg:#0f1720; --card:#081024; --accent:#10b981; --muted:#9aa5b1; --white:#e6eef6;
+}
+*{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:var(--white);}
+body{margin:0;min-height:100vh;background:linear-gradient(180deg,#071227 0%,#051020 100%);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;}
+.app{width:100%;max-width:480px;background:linear-gradient(180deg,rgba(255,255,255,0.03),transparent);border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(2,6,23,0.6);}
+h1{text-align:center;margin-top:0;font-size:20px;}
+label{font-weight:600;display:block;margin:12px 0 6px;color:var(--muted);}
+input,textarea{width:100%;background:#021021;border:1px solid rgba(255,255,255,0.05);color:var(--white);padding:10px;border-radius:6px;font-family:monospace;font-size:14px;}
+textarea{resize:vertical;min-height:160px;}
+button{background:var(--accent);border:none;color:#021;padding:12px;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px;width:100%;margin-top:16px;}
+.qr-wrap{text-align:center;margin-top:20px;}
+canvas{background:#fff;padding:8px;border-radius:8px;}
+small{color:var(--muted);display:block;margin-top:10px;text-align:center;}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <h1>QR Generator for Attendance</h1>
+
+  <label for="url">POST URL</label>
+  <input type="text" id="url" placeholder="https://example.com/api/attendance" value="https://example.com/api/attendance">
+
+  <label for="json">JSON Data</label>
+  <textarea id="json">{
+  "student_id": "12345",
+  "session": "math-01"
+}</textarea>
+
+  <button id="generateBtn">Generate QR Code</button>
+
+  <div class="qr-wrap" id="qrWrap"></div>
+  <small id="status"></small>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+<script>
+const urlEl = document.getElementById('url');
+const jsonEl = document.getElementById('json');
+const qrWrap = document.getElementById('qrWrap');
+const statusEl = document.getElementById('status');
+const btn = document.getElementById('generateBtn');
+
+btn.addEventListener('click', () => {
+  const url = urlEl.value.trim();
+  const jsonText = jsonEl.value.trim();
+
+  if(!url || !jsonText){
+    statusEl.textContent = 'Please fill in both fields.';
+    qrWrap.innerHTML = '';
+    return;
+  }
+
+  try {
+    JSON.parse(jsonText);
+  } catch(e){
+    statusEl.textContent = 'Invalid JSON: ' + e.message;
+    qrWrap.innerHTML = '';
+    return;
+  }
+
+  const qrData = `${url}\n${jsonText}`;
+
+  qrWrap.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  qrWrap.appendChild(canvas);
+
+  QRCode.toCanvas(canvas, qrData, { width: 260, margin: 1, color:{dark:"#000", light:"#fff"} }, err => {
+    if(err){
+      statusEl.textContent = 'Error generating QR: ' + err;
+    } else {
+      statusEl.textContent = 'QR code generated successfully!';
+    }
+  });
+});
+</script>
+
+</body>
+</html>
