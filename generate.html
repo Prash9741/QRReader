@@ -46,10 +46,12 @@ class QRGenerator {
   }
 
   async generateCode() {
-    const nowUTC = Date.now(); // milliseconds UTC
+    const nowUTC = Date.now(); // milliseconds since Jan 1, 1970 UTC
+    const date = new Date(nowUTC); // create a Date object
+    console.log(date.toUTCString()); // human-readable UTC time
+
     const utcSeconds = Math.floor(nowUTC / 1000);
     const window = Math.floor(utcSeconds / this.windowSize);
-    // SHA-256 hash
     const data = new TextEncoder().encode(this.secret + window);
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -57,21 +59,20 @@ class QRGenerator {
     const base36 = BigInt("0x" + hashHex).toString(36).toUpperCase();
     const code = base36.slice(0, 6);
 
-    const humanTime = new Date(utcSeconds * 1000).toISOString();
-    console.log("UTC Time:", humanTime, "Window:", window, "Code:", code);
-
-    // Update display
     this.codeDisplay.textContent = code;
-    this.baseJson.data.window=window;
+    this.baseJson.data.window = window;
 
-    return code;
+    return { code, window };
   }
 
   async generateQR() {
-    const code = await this.generateCode();
-    this.baseJson.data.code=code;
-    const jsonData = JSON.stringify(this.baseJson);
+    const nowUTC = Date.now();
+    const utcSeconds = Math.floor(nowUTC / 1000);
 
+    const { code, window } = await this.generateCode();
+    this.baseJson.data.code = code;
+
+    const jsonData = JSON.stringify(this.baseJson);
     const qrData = `${this.postUrl}\n${jsonData}`;
 
     this.qrWrap.innerHTML = '';
@@ -79,7 +80,9 @@ class QRGenerator {
     this.qrWrap.appendChild(canvas);
 
     QRCode.toCanvas(canvas, qrData, { width: 260, margin: 1, color:{dark:"#000", light:"#fff"} });
-    this.animateTimer(this.windowSize);
+        // Calculate remaining time in the current window
+    const timeRemaining = this.windowSize - (utcSeconds % this.windowSize);
+    this.animateTimer(timeRemaining);
   }
 
   animateTimer(duration) {
@@ -93,7 +96,7 @@ class QRGenerator {
       if(progress < 1){
         this.timerId = requestAnimationFrame(frame);
       } else {
-        this.generateQR();
+        this.generateQR(); // regenerate QR at window boundary
       }
     }
 
