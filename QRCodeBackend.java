@@ -25,7 +25,10 @@ public class QRCodeBackend {
         stopper.start();
 
         while (true) {
-            long utcSeconds = Instant.now().getEpochSecond()-5; // UTC+0 seconds and can change the time from here, Prashant
+            // long utcSeconds = Instant.now().getEpochSecond()-5; // UTC+0 seconds, Prashant 
+            String customTimeStr = "2025-10-25T07:10:33.196+00:00"; 
+            Instant customInstant = Instant.parse(customTimeStr);
+            long utcSeconds = customInstant.getEpochSecond() - 5;
             long window = utcSeconds / WINDOW_SIZE;
 
             if (window != lastWindow) { // generate new code only when window changes
