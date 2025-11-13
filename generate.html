@@ -60,20 +60,17 @@ class QRGenerator {
     const code = base36.slice(0, 6);
 
     this.codeDisplay.textContent = code;
-    this.baseJson.data.window = window;
-
-    return { code, window };
+    // console.log(window);
+    return code;
   }
 
   async generateQR() {
     const nowUTC = Date.now();
     const utcSeconds = Math.floor(nowUTC / 1000);
 
-    const { code, window } = await this.generateCode();
-    this.baseJson.data.code = code;
+    this.baseJson.code = await this.generateCode();
 
-    const jsonData = JSON.stringify(this.baseJson);
-    const qrData = `${this.postUrl}\n${jsonData}`;
+    const qrData = JSON.stringify(this.baseJson);
 
     this.qrWrap.innerHTML = '';
     const canvas = document.createElement('canvas');
@@ -111,8 +108,7 @@ class QRGenerator {
 
 // Initialize
 const qrApp = new QRGenerator({
-  postUrl: "https://api.restful-api.dev/objects",
-  baseJson: { name: "Prashant", data: {"window":"","code":""} },
+  baseJson: {"code":""},
   secret: "shared-secret-123",
   windowSize: 5,
   qrWrap: document.getElementById('qrWrap'),

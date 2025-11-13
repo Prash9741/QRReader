@@ -46,7 +46,6 @@ pre{width:100%;min-height:120px;background:#021021;border:1px solid rgba(255,255
     <div class="small" id="status">Status: idle</div>
   </div>
 </div>
-
 <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
 class QRScanner {
@@ -70,7 +69,7 @@ class QRScanner {
   }
 
   init() {
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       this.statusEl.textContent = 'Status: camera API not supported';
       this.button.disabled = true;
     } else {
@@ -80,11 +79,11 @@ class QRScanner {
 
   attachEvents() {
     this.button.addEventListener('click', async () => {
-      if(this.button.textContent === 'Start Scan'){
-        await this.requestCameraAndLocation();
-      } else if(this.button.textContent === 'Stop Scan'){
+      if (this.button.textContent === 'Start Scan') {
+        await this.requestLocationFirst();
+      } else if (this.button.textContent === 'Stop Scan') {
         this.stopCamera();
-      } else if(this.button.textContent === 'Scan Again'){
+      } else if (this.button.textContent === 'Scan Again') {
         this.scanning = true;
         this.scannedOnce = false;
         this.button.textContent = 'Stop Scan';
@@ -94,39 +93,69 @@ class QRScanner {
     });
   }
 
-  async requestCameraAndLocation() {
-    this.statusEl.textContent = 'Status: requesting camera & location...';
+  // 🔹 Step 1: Request location before opening camera
+  async requestLocationFirst() {
+    this.statusEl.textContent = 'Status: requesting location...';
+    this.button.textContent = 'Getting location...';
+    this.button.disabled = true;
+
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" }, audio:false });
+      const coords = await new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation not supported'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve(pos.coords),
+          err => reject(err),
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      });
+
+      this.userLocation = coords;
+      this.statusEl.textContent = 'Status: location acquired';
+      this.button.textContent = 'Opening camera...';
+
+      // ✅ Only open camera after location success
+      await this.openCamera();
+
+    } catch (err) {
+      console.warn('Location error:', err);
+      this.userLocation = null;
+      this.statusEl.textContent = 'Status: location denied';
+      this.button.textContent = 'Camera blocked (location required)';
+      this.button.disabled = false; // allow retry
+      alert('Camera cannot be opened because location access is required.');
+    }
+  }
+
+  async openCamera() {
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false
+      });
       this.video.srcObject = this.stream;
-
-      if(!this.userLocation && navigator.geolocation){
-        this.userLocation = await new Promise((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            pos => resolve(pos.coords),
-            err => resolve(null),
-            { enableHighAccuracy:true, timeout:10000 }
-          );
-        });
-      }
-
       this.scanning = true;
       this.scannedOnce = false;
       this.button.textContent = 'Stop Scan';
+      this.button.disabled = false;
       this.statusEl.textContent = 'Status: scanning...';
       requestAnimationFrame(() => this.tick());
-    } catch(err){
+    } catch (err) {
       console.error(err);
-      this.statusEl.textContent = 'Status: camera or location error';
+      this.statusEl.textContent = 'Status: camera access error';
+      this.button.textContent = 'Start Scan';
+      alert('Unable to access camera. Please check camera permissions.');
     }
   }
 
   stopCamera() {
-    if(this.stream) this.stream.getTracks().forEach(t => t.stop());
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
     this.scanning = false;
     this.button.textContent = 'Start Scan';
     this.statusEl.textContent = 'Status: stopped';
-    this.overlay.getContext('2d').clearRect(0,0,this.overlay.width,this.overlay.height);
+    this.overlay.getContext('2d').clearRect(0, 0, this.overlay.width, this.overlay.height);
   }
 
   drawLine(ctx, begin, end, color) {
@@ -144,66 +173,72 @@ class QRScanner {
   }
 
   processQRData(rawData) {
-    const lines = rawData.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
-    if(lines.length < 2){
-      this.resultEl.textContent = "QR content invalid. Needs URL + JSON.";
-      this.statusEl.textContent = "Status: invalid QR";
-      return;
-    }
-
-    const url = lines[0];
     let payload;
-    try { payload = JSON.parse(lines.slice(1).join('\n')); }
-    catch(err){
-      this.resultEl.textContent = "Invalid JSON:\n"+err;
+    try {
+      payload = JSON.parse(rawData);
+    } catch (err) {
+      this.resultEl.textContent = "Invalid JSON:\n" + err;
       this.statusEl.textContent = "Status: JSON parse error";
       return;
     }
 
-    // Add location
-    if(this.userLocation){
-      if(!payload.data) payload.data = {};
-      payload.data.latitude = this.userLocation.latitude;
-      payload.data.longitude = this.userLocation.longitude;
-      if(this.userLocation.altitude !== null) payload.data.altitude = this.userLocation.altitude;
+    let student = { studentId: 9741 };
+    if (this.userLocation) {
+      student.latitude = this.userLocation.latitude;
+      student.longitude = this.userLocation.longitude;
+      if (this.userLocation.altitude !== null)
+        student.altitude = this.userLocation.altitude;
     }
-
-    this.sendPayload(url, payload);
+    const fixedUrl = `http://localhost:8080/Atten/MarkAttendance/${payload.code}`;
+    this.sendPayload(fixedUrl, student);
   }
 
-  sendPayload(url, payload) {
-    this.statusEl.textContent = "Status: sending POST...";
-    fetch(url, {
-      method:"POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    })
-    .then(async res=>{
+  sendPayload(url, student) {
+  this.statusEl.textContent = "Status: sending POST...";
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(student),
+  })
+    .then(async (res) => {
+
+      // If backend sends 400 / 404 / 500 → handle as failure
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(
+          `${errorText}`
+        );
+      }
       const ct = res.headers.get("content-type") || "";
-      const text = ct.includes("application/json") ?
-        JSON.stringify(await res.json(), null, 2) : await res.text();
-      this.resultEl.textContent = text;
-      this.statusEl.textContent = "Status: POST successful";
+      const text = ct.includes("application/json")
+        ? JSON.stringify(await res.json(), null, 2)
+        : await res.text();
+
+      this.resultEl.textContent = text+" "+student.studentId;
+      this.statusEl.textContent = "Status: Request Raised";
     })
-    .catch(err=>{
-      this.resultEl.textContent = "POST failed:\n"+err;
-      this.statusEl.textContent = "Status: POST failed";
+    .catch((err) => {
+      this.resultEl.textContent = "POST failed:\n" + err.message;
+      this.statusEl.textContent = "Status: Request failed";
     });
-  }
+}
+
+
 
   tick() {
-    if(!this.scanning) return;
-    if(this.video.readyState === this.video.HAVE_ENOUGH_DATA){
+    if (!this.scanning) return;
+    if (this.video.readyState === this.video.HAVE_ENOUGH_DATA) {
       this.resizeOverlay();
       this.canvas.width = this.video.videoWidth;
       this.canvas.height = this.video.videoHeight;
-      this.ctx.drawImage(this.video,0,0,this.canvas.width,this.canvas.height);
-      const imageData = this.ctx.getImageData(0,0,this.canvas.width,this.canvas.height);
-      const code = jsQR(imageData.data,this.canvas.width,this.canvas.height,{inversionAttempts:"attemptBoth"});
+      this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+      const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+      const code = jsQR(imageData.data, this.canvas.width, this.canvas.height, { inversionAttempts: "attemptBoth" });
       const octx = this.overlay.getContext('2d');
-      octx.clearRect(0,0,this.overlay.width,this.overlay.height);
+      octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
 
-      if(code && !this.scannedOnce){
+      if (code && !this.scannedOnce) {
         this.drawLine(octx, code.location.topLeftCorner, code.location.topRightCorner, '#10b981');
         this.drawLine(octx, code.location.topRightCorner, code.location.bottomRightCorner, '#10b981');
         this.drawLine(octx, code.location.bottomRightCorner, code.location.bottomLeftCorner, '#10b981');
@@ -222,7 +257,7 @@ class QRScanner {
 }
 
 // Initialize
-document.addEventListener("DOMContentLoaded", ()=>{
+document.addEventListener("DOMContentLoaded", () => {
   new QRScanner(
     document.getElementById('video'),
     document.getElementById('overlay'),
@@ -232,6 +267,3 @@ document.addEventListener("DOMContentLoaded", ()=>{
   );
 });
 </script>
-
-</body>
-</html>
