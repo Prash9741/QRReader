@@ -370,8 +370,7 @@
           student.latitude = this.userLocation.latitude;
           student.longitude = this.userLocation.longitude;
         }
-
-        const fixedUrl = `http://localhost:8080/Atten/MarkAttendance/${payload.code}`;
+        const fixedUrl = `https://gulshan-deploy-348807148202.us-central1.run.app/Atten/MarkAttendance/${payload.code}`;
         this.sendPayload(fixedUrl, student);
       }
 
